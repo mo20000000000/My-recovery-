@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رفيق التعافي</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 15px; text-align: center; }
+    .card { background: #1e293b; border-radius: 14px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    h2 { margin-top: 0; color: #38bdf8; font-size: 1.3rem; }
+    .counter { font-size: 3.5rem; font-weight: bold; color: #4ade80; margin: 10px 0; }
+    button { background: #3b82f6; color: white; border: none; padding: 10px 18px; border-radius: 8px; font-size: 1rem; cursor: pointer; margin: 5px; font-weight: 500; }
+    button:active { transform: scale(0.96); }
+    button.danger { background: #ef4444; }
+    button.secondary { background: #475569; font-size: 0.85rem; }
+    input[type="date"], input[type="text"] { padding: 10px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 1rem; box-sizing: border-box; }
+    
+    /* عجلة الطوارئ */
+    .wheel-container { position: relative; width: 280px; height: 280px; margin: 15px auto; }
+    #wheelCanvas { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+    .pointer { 
+      position: absolute; 
+      top: -12px; 
+      left: 50%; 
+      transform: translateX(-50%); 
+      width: 0; 
+      height: 0; 
+      border-left: 14px solid transparent; 
+      border-right: 14px solid transparent; 
+      border-top: 24px solid #ef4444; 
+      z-index: 10;
+    }
+    .wheel-res { min-height: 40px; margin: 12px 0; font-size: 1.15rem; font-weight: bold; color: #fde047; }
+    
+    /* إدارة المهام */
+    .task-manager { margin-top: 15px; border-top: 1px solid #334155; padding-top: 15px; text-align: right; }
+    .task-item { display: flex; justify-content: space-between; align-items: center; background: #334155; padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 0.9rem; }
+    .del-btn { background: #ef4444; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.8rem; }
+    .add-box { display: flex; gap: 8px; margin-top: 10px; }
+    .add-box input { flex: 1; }
+    audio { margin-top: 10px; width: 100%; }
+  </style>
+</head>
+<body>
+
+  <!-- عداد التعافي -->
+  <div class="card">
+    <h2> عداد التعافي</h2>
+    <label>تاريخ البداية: </label>
+    <input type="date" id="startDate" onchange="updateStart()">
+    <div class="counter" id="daysCount">0</div>
+    <p style="margin: 0; color: #94a3b8;">أيام من الصمود والثبات</p>
+    <br>
+    <button class="danger" onclick="reportSlip()">سجلت زلة (-1 يوم)</button>
+  </div>
+
+  <!-- عجلة الطوارئ -->
+  <div class="card">
+    <h2> عجلة الطوارئ (وقت الخطر)</h2>
+    <div class="wheel-container">
+      <div class="pointer"></div>
+      <canvas id="wheelCanvas" width="500" height="500"></canvas>
+    </div>
+    
+    <div class="wheel-res" id="spinResult">اضغط على الزر واهرب فوراً</div>
+    <button id="spinBtn" onclick="spinWheel()"> لف العجلة الآن</button>
+    <br>
+    <button class="secondary" onclick="toggleManager()">⚙️ تعديل وإضافة المهام</button>
+
+    <!-- قائمة تعديل وإضافة المهام -->
+    <div class="task-manager" id="taskManager" style="display: none;">
+      <h3 style="font-size: 0.95rem; color: #38bdf8; margin: 0 0 10px;">إدارة خطط الهروب في العجلة:</h3>
+      <div id="taskList"></div>
+      <div class="add-box">
+        <input type="text" id="newTaskInput" placeholder="اكتب مهمة هروب جديدة...">
+        <button onclick="addTask()">إضافة</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ركن اليوميات الصوتية -->
+  <div class="card">
+    <h2> ركن اليوميات الصوتية</h2>
+    <p style="font-size: 0.85rem; color: #94a3b8;">سجل مشاعرك لتفريغ الطاقة وقت التوتر</p>
+    <button id="recBtn" onclick="toggleRecord()"> بدء التسجيل</button>
+    <div id="audioList"></div>
+  </div>
+
+  <script>
+    // ---------------- 1. منطق العداد ----------------
+    let baseDate = localStorage.getItem('recovery_start') || new Date().toISOString().split('T')[0];
+    let penaltyDays = parseInt(localStorage.getItem('penalty_days') || '0');
+    localStorage.setItem('recovery_start', baseDate);
+    document.getElementById('startDate').value = baseDate;
+
+    function calculateDays() {
+      const start = new Date(localStorage.getItem('recovery_start'));
+      const today = new Date();
+      const diffTime = today - start;
+      let days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) - penaltyDays;
+      document.getElementById('daysCount').innerText = days < 0 ? 0 : days;
+    }
+
+    function updateStart() {
+      localStorage.setItem('recovery_start', document.getElementById('startDate').value);
+      penaltyDays = 0;
+      localStorage.setItem('penalty_days', '0');
+      calculateDays();
+    }
+
+    function reportSlip() {
+      if (confirm("الزلة مش نهاية المطاف، كمل المشوار بقوة! نخصم يوم؟")) {
+        penaltyDays += 1;
+        localStorage.setItem('penalty_days', penaltyDays);
+        calculateDays();
+      }
+    }
+    calculateDays();
+
+    // ---------------- 2. العجلة والمهام ----------------
+    const defaultPlans = [
+      "اغسل وشك بماية مثلجة فوراً 🧊",
+      "انزل اتمشى ربع ساعة 🚶‍♂️",
+      "اتصل بصديق ثقة احكيله 📞",
+      "اعمل 15 عدة ضغط حالاً 💪",
+      "اتوضى وصلّي ركعتين 🤲",
+      "تمارين تنفس 3 دقائق 🧘"
+    ];
+
+    let plans = JSON.parse(localStorage.getItem('escape_plans')) || defaultPlans;
+    const colors = ["#0284c7", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#059669", "#ea580c", "#4f46e5"];
+    
+    let currentAngle = 0;
+    let isSpinning = false;
+    const canvas = document.getElementById("wheelCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function savePlans() {
+      localStorage.setItem('escape_plans', JSON.stringify(plans));
+      drawWheel();
+      renderTasks();
+    }
+
+    function drawWheel() {
+      const numSegments = plans.length;
+      const anglePerSegment = (2 * Math.PI) / numSegments;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < numSegments; i++) {
+        const startAngle = i * anglePerSegment + currentAngle;
+        const endAngle = startAngle + anglePerSegment;
+
+        ctx.beginPath();
+        ctx.moveTo(250, 250);
+        ctx.arc(250, 250, 240, startAngle, endAngle);
+        ctx.fillStyle = colors[i % colors.length];
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(250, 250);
+        ctx.rotate(startAngle + anglePerSegment / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px system-ui";
+        const shortText = plans[i].length > 18 ? plans[i].substring(0, 16) + "..." : plans[i];
+        ctx.fillText(shortText, 220, 6);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(250, 250, 25, 0, 2 * Math.PI);
+      ctx.fillStyle = "#0f172a";
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    function spinWheel() {
+      if (isSpinning || plans.length === 0) return;
+      isSpinning = true;
+      document.getElementById('spinBtn').disabled = true;
+      document.getElementById('spinResult').innerText = "العجلة تدور...";
+
+      const spinDuration = 3500;
+      const start = performance.now();
+      const baseRounds = (Math.PI * 2) * (5 + Math.random() * 3);
+      const startAngle = currentAngle;
+
+      function animate(time) {
+        let elapsed = time - start;
+        let progress = elapsed / spinDuration;
+
+        if (progress > 1) progress = 1;
+        let easeOut = 1 - Math.pow(1 - progress, 3);
+        currentAngle = startAngle + baseRounds * easeOut;
+        drawWheel();
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          document.getElementById('spinBtn').disabled = false;
+          determineWinner();
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    function determineWinner() {
+      const numSegments = plans.length;
+      const anglePerSegment = (2 * Math.PI) / numSegments;
+      let normalizedAngle = (1.5 * Math.PI - (currentAngle % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+      let winningIndex = Math.floor(normalizedAngle / anglePerSegment);
+      document.getElementById('spinResult').innerText = "المهمة: " + plans[winningIndex];
+    }
+
+    function toggleManager() {
+      const box = document.getElementById("taskManager");
+      box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+
+    function renderTasks() {
+      const list = document.getElementById("taskList");
+      list.innerHTML = "";
+      plans.forEach((task, idx) => {
+        const div = document.createElement("div");
+        div.className = "task-item";
+        div.innerHTML = `<span>${task}</span><button class="del-btn" onclick="removeTask(${idx})">حذف</button>`;
+        list.appendChild(div);
+      });
+    }
+
+    function addTask() {
+      const input = document.getElementById("newTaskInput");
+      const val = input.value.trim();
+      if (val) {
+        plans.push(val);
+        input.value = "";
+        savePlans();
+      }
+    }
+
+    function removeTask(idx) {
+      if (plans.length <= 2) {
+        alert("لا يمكن حذف المزيد، يجب بقاء خيارين على الأقل!");
+        return;
+      }
+      plans.splice(idx, 1);
+      savePlans();
+    }
+
+    drawWheel();
+    renderTasks();
+
+    // ---------------- 3. التسجيل الصوتي ----------------
+    let mediaRecorder, chunks = [], isRecording = false;
+
+    async function toggleRecord() {
+      const btn = document.getElementById('recBtn');
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          chunks = [];
+          mediaRecorder.ondataavailable = e => chunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const url = URL.createObjectURL(blob);
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = url;
+            document.getElementById('audioList').prepend(audio);
+          };
+          mediaRecorder.start();
+          isRecording = true;
+          btn.innerText = "⏹ إيقاف وحفظ";
+          btn.style.background = "#e11d48";
+        } catch (err) {
+          alert("يرجى إعطاء المتصفح صلاحية استخدام المايكروفون.");
+        }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.innerText = " بدء التسجيل";
+        btn.style.background = "#3b82f6";
+      }
+    }
+  </script>
+</body>
+</html>
